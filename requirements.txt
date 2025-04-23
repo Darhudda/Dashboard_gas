@@ -1,0 +1,12 @@
+pandas
+scipy
+seaborn
+dash
+plotly
+gunicorn
+streamlit
+streamlit-option-menu
+streamlit-folium
+folium
+matplotlib
+statsmodels
