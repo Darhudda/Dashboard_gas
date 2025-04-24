@@ -26,12 +26,25 @@ departamento = st.sidebar.selectbox("Selecciona el departamento", sorted(df["DEP
 df_anio = df[df["ANIO_VENTA"] == anio]
 df_barras = df_anio[df_anio["DEPARTAMENTO"] == departamento]
 
+# KPIs
+col1, col2, col3 = st.columns(3)
+with col1:
+    st.metric("Volumen Total Suministrado (m³)", f"{df_anio['CANTIDAD_VOLUMEN_SUMINISTRADO'].sum():,.2f}")
+with col2:
+    st.metric("Vehículos Atendidos", f"{df_anio['VEHICULOS_ATENDIDOS'].sum():,}")
+with col3:
+    st.metric("Número de Ventas", f"{df_anio['NUMERO_DE_VENTAS'].sum():,}")
+
+
 # Texto resumen
 ventas = df_anio["NUMERO_DE_VENTAS"].sum()
 volumen = df_anio["CANTIDAD_VOLUMEN_SUMINISTRADO"].sum()
 st.markdown(
     f"""
-    <div style='background-color:#e6f4ea; border-left:6px solid #4caf50; padding:15px; border-radius:8px; font-size:16px;'>
+    <div style='background-color:#1e1e1e; color:white; border-left:6px solid #4caf50;
+        padding:15px;
+        border-radius:8px;
+        font-size:16px;'>
         <strong>Interpretación</strong><br>
         En {anio} se registraron <strong>{ventas:,}</strong> ventas y se suministraron <strong>{volumen:,.2f} m³</strong> de GNV.
     </div>

@@ -58,18 +58,15 @@ Este estudio incluye las siguientes variables:
         """
     )
 
-
-    # Imagen alusiva
-    imagen = Image.open("gas_pic.jpg")
-    st.image(imagen, caption="Paneles solares en Colombia", use_container_width=True)
-    st.caption("Imagen tomada de [El Colombiano](https://www.elcolombiano.com/negocios/como-afecta-a-los-carros-la-suspension-de-gas-natural-vehicular-FG25457507)")
-
     # Carga rápida del CSV y resumen
     df = pd.read_csv("consulta_ventas_gas_natural.csv")
     df["FECHA_VENTA"] = pd.to_datetime(df["FECHA_VENTA"])
     df["DEPARTAMENTO"] = df["DEPARTAMENTO"].str.upper()
     df["ANIO_VENTA"] = df["FECHA_VENTA"].dt.year
-    df["NOMBRE_MES"] = df["FECHA_VENTA"].dt.month_name(locale="es")
+    meses_es = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+            "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    df["NOMBRE_MES"] = df["FECHA_VENTA"].dt.month.apply(lambda x: meses_es[x - 1])
+
     orden_meses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
                 "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     df["NOMBRE_MES"] = pd.Categorical(df["NOMBRE_MES"], categories=orden_meses, ordered=True)
