@@ -1,110 +1,58 @@
 import streamlit as st
 import pandas as pd
+import geopandas as gpd
 import folium
 from streamlit_folium import st_folium
+from folium import Choropleth
 
 st.set_page_config(page_title="Mapa", layout="wide")
-st.title("Mapa Interactivo de Producción Solar")
+st.title("Mapa Interactivo - Volumen Promedio por Departamento")
 
 # Cargar datos
-df = pd.read_csv("energia_solar.csv")
-df["Latitud"] = df["Latitud"].astype(float)
-df["Longitud"] = df["Longitud"].astype(float)
+df = pd.read_csv("consulta_ventas_gas_natural.csv")
+df["FECHA_VENTA"] = pd.to_datetime(df["FECHA_VENTA"])
+df["ANIO_VENTA"] = df["FECHA_VENTA"].dt.year
 df.columns = df.columns.str.strip()
 
-# Filtro por departamento
-departamentos = df["Departamento"].unique().tolist()
-departamento_seleccionado = st.selectbox("Selecciona un departamento", ["Todos"] + departamentos)
+# Cargar mapa GeoJSON de Colombia
+colombia_geo = gpd.read_file("https://raw.githubusercontent.com/lihkir/Uninorte/main/AppliedStatisticMS/DataVisualizationRPython/Lectures/Python/PythonDataSets/Colombia.geo.json")
 
-# Filtrar el dataframe
-if departamento_seleccionado != "Todos":
-    df_filtrado = df[df["Departamento"] == departamento_seleccionado]
-else:
-    df_filtrado = df
+# Filtro por año
+anios = sorted(df["ANIO_VENTA"].unique())
+anio_seleccionado = st.selectbox("Selecciona un año", anios)
 
-# Centro del mapa calculado dinámicamente
-centro_lat = df_filtrado["Latitud"].mean()
-centro_lon = df_filtrado["Longitud"].mean()
+# Agrupación por departamento y año
+mapa_data = df[df["ANIO_VENTA"] == anio_seleccionado].groupby("DEPARTAMENTO").agg(
+    CANTIDAD_PROMEDIO=pd.NamedAgg(column="CANTIDAD_VOLUMEN_SUMINISTRADO", aggfunc="mean")
+).reset_index()
 
-# Crear mapa
-m = folium.Map(location=[centro_lat, centro_lon], zoom_start=6)
+# Unir datos al shapefile
+colombia_geo_merged = colombia_geo.merge(mapa_data, left_on="NOMBRE_DPT", right_on="DEPARTAMENTO", how="left")
+colombia_geo_merged["CANTIDAD_PROMEDIO"] = colombia_geo_merged["CANTIDAD_PROMEDIO"].fillna(0)
 
-# Verificar que el nombre de columnas no tenga espacios
-df.columns = df.columns.str.strip()
+# Centrado del mapa
+centro = [4.5709, -74.2973]
+m = folium.Map(location=centro, zoom_start=5.2)
 
+# Capa de coropletas
+Choropleth(
+    geo_data=colombia_geo_merged.__geo_interface__,
+    data=colombia_geo_merged,
+    columns=["NOMBRE_DPT", "CANTIDAD_PROMEDIO"],
+    key_on="feature.properties.NOMBRE_DPT",
+    fill_color="YlGnBu",
+    fill_opacity=0.7,
+    line_opacity=0.2,
+    legend_name="Volumen Promedio (m³)"
+).add_to(m)
 
-# Marcadores dinámicos
-if departamento_seleccionado == "Todos":
-    # Agrupar por departamento (mostrar un punto promedio por depto)
-    resumen = df.groupby("Departamento").agg({
-        "Latitud": "mean",
-        "Longitud": "mean",
-        "Producción_kWh": "mean",
-        "Horas_Sol_Diarias": "mean"
-    }).reset_index()
-
-    for _, row in resumen.iterrows():
-        folium.CircleMarker(
-            location=[row["Latitud"], row["Longitud"]],
-            radius=8,
-            color="green",
-            fill=True,
-            fill_opacity=0.7,
-            popup=(f"<b>{row['Departamento']}</b><br>"
-                   f"Prom. Producción: {round(row['Producción_kWh'], 2)} kWh<br>"
-                   f"Prom. Sol: {round(row['Horas_Sol_Diarias'], 2)} hrs"),
-            tooltip=row["Departamento"]
+# Agregar etiquetas
+for _, row in colombia_geo_merged.iterrows():
+    if row["CANTIDAD_PROMEDIO"] > 0:
+        folium.Marker(
+            location=[row["geometry"].centroid.y, row["geometry"].centroid.x],
+            icon=None,
+            popup=f"{row['NOMBRE_DPT']}: {round(row['CANTIDAD_PROMEDIO'], 2)} m³"
         ).add_to(m)
-else:
-    # Mostrar solo un marcador promedio del departamento seleccionado
-    df_depto = df[df["Departamento"] == departamento_seleccionado]
-    lat_mean = df_depto["Latitud"].mean()
-    lon_mean = df_depto["Longitud"].mean()
-    prod_mean = df_depto["Producción_kWh"].mean()
-    sol_mean = df_depto["Horas_Sol_Diarias"].mean()
 
-    folium.CircleMarker(
-        location=[lat_mean, lon_mean],
-        radius=10,
-        color="blue",
-        fill=True,
-        fill_opacity=0.7,
-        popup=(f"<b>{departamento_seleccionado}</b><br>"
-               f"Prom. Producción: {round(prod_mean, 2)} kWh<br>"
-               f"Prom. Sol: {round(sol_mean, 2)} hrs"),
-        tooltip=departamento_seleccionado
-    ).add_to(m)
-
-
-# Mostrar mapa
-st_data = st_folium(m, width=800, height=500)
-
-# Texto debajo del mapa (resumen del departamento)
-st.markdown("---")
-if departamento_seleccionado != "Todos":
-    prod_prom = round(df_filtrado["Producción_kWh"].mean(), 2)
-    sol_prom = round(df_filtrado["Horas_Sol_Diarias"].mean(), 2)
-    num_paneles = len(df_filtrado)
-
-    st.subheader(f"Datos generales para {departamento_seleccionado}")
-    st.markdown(
-        f"""
-        - Número de paneles registrados: **{num_paneles}**  
-        - Producción promedio: **{prod_prom} kWh**  
-        - Horas de sol promedio: **{sol_prom} hrs**
-        """
-    )
-
-    st.subheader("Paneles solares registrados")
-    for _, row in df_filtrado.iterrows():
-        st.markdown(
-            f"""
-            <div style="background-color:#1e1e1e;padding:10px;border-radius:8px;margin-bottom:10px;border:1px solid #444;">
-                <b>{row['Panel_ID']}</b><br>
-                Producción: {row['Producción_kWh']} kWh<br>
-                Horas de sol: {row['Horas_Sol_Diarias']} hrs
-            </div>
-            """, unsafe_allow_html=True
-        )
-else:
-    st.info("Selecciona un departamento en el menú para ver estadísticas detalladas debajo del mapa.")
+st_data = st_folium(m, width=1000, height=550)
